@@ -1,0 +1,12 @@
+{
+    "name": "d3js-with-socket-io-demo",
+    "version": "0.0.1",
+    "private": false,
+    "dependencies": {
+        "socket.io": "~0.9.16",
+        "http": "*"
+    },
+    "scripts": {
+        "start": "node server.js"
+    }
+}

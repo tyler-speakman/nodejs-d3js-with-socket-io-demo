@@ -1,0 +1,241 @@
+<html>
+
+<head>
+    <title>nodejs-d3js-with-socket-io-demo</title>
+
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
+
+    <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.0/jquery.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/mustache.js/0.7.2/mustache.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/moment.js/2.5.1/moment.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/d3/3.4.2/d3.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/lodash.js/2.4.1/lodash.min.js"></script>
+
+    <script src="//netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js"></script>
+    <style>
+    .update {
+        background-color: #fff0f0;
+    }
+    .enter {
+        background-color: #f0fff0;
+    }
+    .update, .enter {
+        fill-opacity:1;
+        fill:#a0a0a0;
+    }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <div class="row">
+            <div class="jumbotron">
+                <h1>D3 with Socket-IO Demo</h1>
+                <p>A quick and dirty D3 with Socket-IO demo. The server emits a new data event periodically. The D3 incorporates and displays the new data. It also throws away old data (first-in-first-out).
+                </p>
+                <p>For reference,
+                </p>
+                <ul>
+                    <li>
+                        <a href="http://socket.io/">http://socket.io/</a>
+                    </li>
+                    <li>
+                        <a href="http://d3js.org/">http://d3js.org/</a>
+                    </li>
+                </ul>
+            </div>
+
+        </div>
+        <div class="row log">
+            <div class="well col-md-12">
+                <h2>Server Emissions</h2>
+                <div class='chart bar-chart'></div>
+            </div>
+        </div>
+        <div class="row log">
+            <div class="well col-md-12">
+                <h2>Server Emissions</h2>
+                <ul class="list-group source-server "></ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Setup socket communication with server -->
+    <script src="/socket.io/socket.io.js" type="text/javascript"></script>
+
+    <script type="text/javascript">
+    //
+    // This script block handles all the Socket-IO communication
+    var handleServerRequest = function(data) {
+        console.log({
+            source: 'server',
+            action: 'request',
+            data: data
+        });
+
+        data.date = new Date(data.date);
+
+        update(data)
+    };
+
+    var socket = io.connect('http://localhost'); //, {port:81}
+    socket.on('server request', handleServerRequest);
+    </script>
+
+    <script type="text/javascript">
+    var data = [];
+
+    var padding = {
+        top: 40,
+        right: 40,
+        bottom: 40,
+        left: 40
+    };
+    var width = Math.max($('.bar-chart').width() - padding.left - padding.right, 960), //960,
+        height = Math.max($('.bar-chart').height() - padding.top - padding.bottom, 500);
+
+    var chart = d3.select(".bar-chart").append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+    var chartFrame = chart.append("g")
+
+    var recordsContainer = chart.append("g")
+        .attr('transform', 'translate(' + padding.left + ',' + padding.top + ')');
+
+    var update = function(newData) {
+
+        //
+        // Update dataset
+
+        // Append new data
+        data = data.concat(newData)
+
+        // Remove old data (i.e., avoid overflows)
+        var maxNumberOfRecords = 100;
+        while (data.length > maxNumberOfRecords) {
+            data.shift();
+        }
+
+        //
+        // Update chart
+
+        // 
+        // Setup scaling
+        var dateScale = d3.time.scale()
+            .domain(_.map(data, function(value, index) {
+                return value.date;
+            }))
+            .range([0, width / maxNumberOfRecords]);
+
+        var valueScale = d3.scale.linear()
+            .range([0, height]);
+
+        //
+        // DATA JOIN (i.e., join new data with old elements, if any)
+        var record = recordsContainer.selectAll("rect")
+            .data(data);
+
+        // UPDATE (i.e., Update old elements as needed.)
+        record.attr("class", "update");
+
+        // ENTER (i.e., Create new elements as needed.)
+        record.enter().append("rect")
+            .attr("class", "enter")
+            .attr("x", width)
+            .attr("y", height);
+
+        // ENTER + UPDATE (i.e., Appending to the enter selection expands the update selection to include entering elements; so, operations on the update selection after appending to the enter selection will apply to both entering and updating nodes.)
+        record
+            .transition()
+            .attr("x", function(d, i) {
+                return Math.floor(dateScale(d.date));
+            })
+            .attr("y", function(d, i) {
+                return height - valueScale(d.value)
+            })
+            .attr("width", function(d, i) {
+                return Math.ceil(width / maxNumberOfRecords) + 2; // Ensure overlap with neighbors
+            })
+            .attr("height", function(d, i) {
+                return valueScale(d.value);
+            })
+            .attr('fill', 'white');
+
+        // EXIT
+        // Remove old elements as needed.
+        record.exit().remove();
+    }
+    </script>
+
+    <script type="text/javascript">
+    //
+    // This script block handles all the visualization. We override the console.log functionality, so technically this whole section can be removed and we still be able to watch the communication in the console
+
+    /**
+     * Returns a string representing the log entry.
+     * @param  {[type]} options An object which looks like: {source: "", action: "", data:""}
+     * @return {[type]}         A string representing the log entry
+     */
+    var getLog = function(options) {
+        options = options || {};
+        options.source = options.source || "?";
+        options.action = options.action || "?";
+        options.data = JSON.stringify(options.data) || "?";
+        options.date = moment().format("YYYY-MM-DD HH:mm:sss");
+
+        return Mustache.render('<li class="list-group-item action-{{action}}"><span class="label label-default">{{date}}</span>{{data}}</li>', options)
+    };
+
+    /**
+     * Adds the log entry to the DOM
+     */
+    var addLog = function() {
+        // Check if there are any enough arguments
+        if (arguments.length < 1) {
+            return;
+        }
+
+        // Check if the first arugment is a well formatted "options" parameter
+        var options = arguments[0];
+        if (!options.source && !options.action) {
+            return;
+        }
+
+        // Append log
+        var log = getLog(options);
+        var selector = Mustache.render('.log .source-{{source}}', options);
+        var logElement = $(selector);
+        logElement.children().each(function(index, target) {
+            var FADE_FACTOR = 0.95;
+            var $target = $(target);
+            var currentOpactiy = +$target.css('opacity');
+            var newOpacity = currentOpactiy * FADE_FACTOR * 0.9 + 0.1;
+            $target.css({
+                opacity: newOpacity
+            });
+        });;
+
+        logElement.prepend(log);
+
+        // Avoid overflows
+        var maxNumberOfLogs = 100;
+        while (logElement.children().length > maxNumberOfLogs) {
+            logElement.children().last().remove();
+        }
+    };
+
+    var console = console || {};
+    var originalConsoleLogFunc = console.log || function() {};
+    console.log = function() {
+        // Apply original logging functionality
+        originalConsoleLogFunc.apply(this, arguments);
+
+        // Apply new logging functionality
+        addLog.apply(null, arguments);
+    };
+    </script>
+</body>
+
+</html>
