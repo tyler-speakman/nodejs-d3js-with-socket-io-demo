@@ -1,7 +1,15 @@
-<p>Run:</p>
+D3 with Socket-IO Demo
+=============
 
-<blockquote>npm start</blockquote>
+A quick and dirty D3 with Socket-IO demo. The NodeJS server emits a new data event periodically. D3 incorporates and displays the new data. It also throws away old data (first-in-first-out).
 
-<p>Navigate to:</p>
+Installation
+-----------
 
-<blockquote><a href="http://localhost:99/">http://localhost:99/</a></blockquote>
+    npm start
+
+Usage
+-----
+
+    http://localhost:99
+

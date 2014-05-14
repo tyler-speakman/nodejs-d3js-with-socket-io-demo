@@ -13,15 +13,22 @@
 
     <script src="//netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js"></script>
     <style>
-    .update {
+    /*    .update {
         background-color: #fff0f0;
     }
     .enter {
         background-color: #f0fff0;
+    }*/
+    .chart .frame {
+        stroke:#ffffff;
+        stroke-width:10;
+        fill-opacity:0;
     }
-    .update, .enter {
+    .chart .update, .chart .enter {
         fill-opacity:1;
-        fill:#a0a0a0;
+        fill:#ffffff;
+        stroke:#ffffff;
+        stroke-width:1;
     }
     </style>
 </head>
@@ -32,7 +39,7 @@
         <div class="row">
             <div class="jumbotron">
                 <h1>D3 with Socket-IO Demo</h1>
-                <p>A quick and dirty D3 with Socket-IO demo. The server emits a new data event periodically. The D3 incorporates and displays the new data. It also throws away old data (first-in-first-out).
+                <p>A quick and dirty D3 with Socket-IO demo. The NodeJS server emits a new data event periodically. The D3 incorporates and displays the new data. It also throws away old data (first-in-first-out).
                 </p>
                 <p>For reference,
                 </p>
@@ -53,17 +60,12 @@
                 <div class='chart bar-chart'></div>
             </div>
         </div>
-        <div class="row log">
-            <div class="well col-md-12">
-                <h2>Server Emissions</h2>
-                <ul class="list-group source-server "></ul>
-            </div>
-        </div>
     </div>
 
-    <!-- Setup socket communication with server -->
+    <!-- Initialize socket communication with server -->
     <script src="/socket.io/socket.io.js" type="text/javascript"></script>
 
+    <!-- Handle socket communication -->
     <script type="text/javascript">
     //
     // This script block handles all the Socket-IO communication
@@ -83,26 +85,40 @@
     socket.on('server request', handleServerRequest);
     </script>
 
+    <!-- Chart -->
     <script type="text/javascript">
     var data = [];
 
-    var padding = {
-        top: 40,
-        right: 40,
-        bottom: 40,
-        left: 40
-    };
-    var width = Math.max($('.bar-chart').width() - padding.left - padding.right, 960), //960,
-        height = Math.max($('.bar-chart').height() - padding.top - padding.bottom, 500);
+    var width = Math.max($('.bar-chart').width(), 960), //960,
+        height = Math.max($('.bar-chart').height(), 500);
+
 
     var chart = d3.select(".bar-chart").append("svg")
         .attr("width", width)
         .attr("height", height);
 
+    var frameSize = 10;
     var chartFrame = chart.append("g")
+        .append("rect")
+        .attr("class", "frame")
+        .attr("x", frameSize)
+        .attr("y", frameSize)
+        .attr("width", (width - frameSize*2))
+        .attr("height", (height - frameSize*2))
+        .attr("stroke", "#ffffff")
+        .attr("stroke-width", frameSize);
 
-    var recordsContainer = chart.append("g")
-        .attr('transform', 'translate(' + padding.left + ',' + padding.top + ')');
+    var chartDefs = chart.append("defs");
+    var chartMask = chartDefs.append("mask").attr("id", "masterMask")
+        .append("rect")
+        .attr("x", frameSize)
+        .attr("y", frameSize)
+        .attr("width", (width - frameSize*2))
+        .attr("height", (height - frameSize*2))
+        .attr("fill", "#ffffff");
+
+    var chartRecords = chart.append("g")
+        .attr("mask", "url(#masterMask)");
 
     var update = function(newData) {
 
@@ -113,9 +129,9 @@
         data = data.concat(newData)
 
         // Remove old data (i.e., avoid overflows)
-        var maxNumberOfRecords = 100;
+        var maxNumberOfRecords = 51;
         while (data.length > maxNumberOfRecords) {
-            data.shift();
+            delete data.shift();
         }
 
         //
@@ -127,14 +143,14 @@
             .domain(_.map(data, function(value, index) {
                 return value.date;
             }))
-            .range([0, width / maxNumberOfRecords]);
+            .range([0, (width - frameSize) / maxNumberOfRecords]);
 
         var valueScale = d3.scale.linear()
-            .range([0, height]);
+            .range([0, (height - frameSize)]);
 
         //
         // DATA JOIN (i.e., join new data with old elements, if any)
-        var record = recordsContainer.selectAll("rect")
+        var record = chartRecords.selectAll("rect")
             .data(data);
 
         // UPDATE (i.e., Update old elements as needed.)
@@ -143,12 +159,13 @@
         // ENTER (i.e., Create new elements as needed.)
         record.enter().append("rect")
             .attr("class", "enter")
-            .attr("x", width)
-            .attr("y", height);
+            .attr("x", (width - frameSize))
+            .attr("y", (height - frameSize));
 
         // ENTER + UPDATE (i.e., Appending to the enter selection expands the update selection to include entering elements; so, operations on the update selection after appending to the enter selection will apply to both entering and updating nodes.)
         record
             .transition()
+            // .duration(200)
             .attr("x", function(d, i) {
                 return Math.floor(dateScale(d.date));
             })
@@ -156,7 +173,7 @@
                 return height - valueScale(d.value)
             })
             .attr("width", function(d, i) {
-                return Math.ceil(width / maxNumberOfRecords) + 2; // Ensure overlap with neighbors
+                return Math.ceil(width / maxNumberOfRecords); // Ensure overlap with neighbors
             })
             .attr("height", function(d, i) {
                 return valueScale(d.value);
@@ -167,74 +184,6 @@
         // Remove old elements as needed.
         record.exit().remove();
     }
-    </script>
-
-    <script type="text/javascript">
-    //
-    // This script block handles all the visualization. We override the console.log functionality, so technically this whole section can be removed and we still be able to watch the communication in the console
-
-    /**
-     * Returns a string representing the log entry.
-     * @param  {[type]} options An object which looks like: {source: "", action: "", data:""}
-     * @return {[type]}         A string representing the log entry
-     */
-    var getLog = function(options) {
-        options = options || {};
-        options.source = options.source || "?";
-        options.action = options.action || "?";
-        options.data = JSON.stringify(options.data) || "?";
-        options.date = moment().format("YYYY-MM-DD HH:mm:sss");
-
-        return Mustache.render('<li class="list-group-item action-{{action}}"><span class="label label-default">{{date}}</span>{{data}}</li>', options)
-    };
-
-    /**
-     * Adds the log entry to the DOM
-     */
-    var addLog = function() {
-        // Check if there are any enough arguments
-        if (arguments.length < 1) {
-            return;
-        }
-
-        // Check if the first arugment is a well formatted "options" parameter
-        var options = arguments[0];
-        if (!options.source && !options.action) {
-            return;
-        }
-
-        // Append log
-        var log = getLog(options);
-        var selector = Mustache.render('.log .source-{{source}}', options);
-        var logElement = $(selector);
-        logElement.children().each(function(index, target) {
-            var FADE_FACTOR = 0.95;
-            var $target = $(target);
-            var currentOpactiy = +$target.css('opacity');
-            var newOpacity = currentOpactiy * FADE_FACTOR * 0.9 + 0.1;
-            $target.css({
-                opacity: newOpacity
-            });
-        });;
-
-        logElement.prepend(log);
-
-        // Avoid overflows
-        var maxNumberOfLogs = 100;
-        while (logElement.children().length > maxNumberOfLogs) {
-            logElement.children().last().remove();
-        }
-    };
-
-    var console = console || {};
-    var originalConsoleLogFunc = console.log || function() {};
-    console.log = function() {
-        // Apply original logging functionality
-        originalConsoleLogFunc.apply(this, arguments);
-
-        // Apply new logging functionality
-        addLog.apply(null, arguments);
-    };
     </script>
 </body>
 

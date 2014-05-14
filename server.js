@@ -22,22 +22,27 @@ function handler(req, res) {
 io.sockets.on('connection', function(socket) {
     console.log('handle connection');
 
-    var periodInMilliseconds = 100;
+    var periodInMilliseconds = 400;
     var timeoutId = -1;
 
-    //
+    /**
+     * Handle "disconnect" events.
+     */
     var handleDisconnect = function() {
         console.log('handle disconnect');
 
         clearTimeout(timeoutId);
     };
 
+    /**
+     * Generate a request to be sent to the client.
+     */
     var generateServerRequest = function() {
         console.log('generate server request');
 
         socket.emit('server request', {
             date: new Date(),
-            value: Math.random()
+            value: Math.pow(Math.random(), 2)
         });
 
         timeoutId = setTimeout(generateServerRequest, periodInMilliseconds);
